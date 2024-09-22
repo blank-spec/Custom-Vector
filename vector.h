@@ -7,14 +7,16 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include <type_traits>
 #include <utility>
 using namespace std;
 
-template <typename T, class Alloc = allocator<T>> class Vector {
-private:
+template <typename T, class Alloc = allocator<T>>
+class Vector {
+ private:
   unsigned int capacity;
   size_t size;
-  T *data;
+  T* data;
   Alloc alloc;
 
   using AllocTraits = allocator_traits<Alloc>;
@@ -41,52 +43,77 @@ private:
     }
   }
 
-public:
-  class Iterator {
-  private:
-    T *ptr;
+ public:
+  template <bool isConst>
+  class baseIterator {
+   private:
+    T* ptr;
 
-  public:
-    explicit Iterator(T *p) : ptr(p) {}
+   public:
+    baseIterator(T* p) : ptr(p) {}
 
-    T &operator*() const { return *ptr; }
-    T *operator->() const { return ptr; }
+    using pointerType = conditional_t<isConst, const T*, T*>;
+    using referenceType = conditional_t<isConst, const T&, T&>;
+    using valueType = T;
 
-    Iterator &operator++() {
+    baseIterator(const baseIterator&) = default;
+    baseIterator& operator=(const baseIterator&) = default;
+
+    referenceType operator*() const { return *ptr; }
+    pointerType operator->() const { return ptr; }
+
+    baseIterator& operator++() {
       ++ptr;
       return *this;
     }
 
-    Iterator &operator++(int) {
-      Iterator tmp = *this;
+    baseIterator& operator++(int) {
+      baseIterator tmp = *this;
       ++ptr;
       return tmp;
     }
 
-    bool operator==(const Iterator &other) const { return ptr == other.ptr; }
-    bool operator!=(const Iterator &other) const { return ptr != other.ptr; }
+    bool operator==(const baseIterator& other) const { return ptr == other.ptr; }
+    bool operator!=(const baseIterator& other) const { return ptr != other.ptr; }
   };
 
-  Vector()
-      : alloc(Alloc()), size(0), capacity(1),
-        data(AllocTraits::allocate(alloc, capacity)) {}
+  using Iterator = baseIterator<false>;
+  using constIterator = baseIterator<true>;
+
+  Iterator begin() {
+    return {data};
+  }
+
+  Iterator end() {
+    return {data + size};
+  }
+
+  constIterator begin() const {
+    return {data};
+  }
+
+  constIterator end() const {
+    return {data + size};
+  }
+
+  Vector() : alloc(Alloc()), size(0), capacity(1), data(AllocTraits::allocate(alloc, capacity)) {}
 
   Vector(std::initializer_list<T> init) : Vector() {
-    for (const auto &elem : init) {
+    for (const auto& elem : init) {
       emplace_back(elem);
     }
   }
 
   ~Vector() { clearMemory(); }
 
-  Vector(Vector &&other) noexcept
+  Vector(Vector&& other) noexcept
       : size(other.size), capacity(other.capacity), data(other.data) {
     other.size = 0;
     other.capacity = 0;
     other.data = nullptr;
   }
 
-  Vector &operator=(Vector &&other) noexcept {
+  Vector& operator=(Vector&& other) noexcept {
     if (this != &other) {
       clearMemory();
 
@@ -101,8 +128,8 @@ public:
     return *this;
   }
 
-  Vector(const Vector &) = delete;
-  Vector &operator=(const Vector &) = delete;
+  Vector(const Vector&) = delete;
+  Vector& operator=(const Vector&) = delete;
 
   void reserve(int newCapacity) {
     if (newCapacity > capacity) {
@@ -110,10 +137,8 @@ public:
     }
   }
 
-  Iterator begin() { return Iterator(data); }
-  Iterator end() { return Iterator(data + size); }
-
-  template <typename... Args> void emplace_back(Args &&...args) {
+  template <typename... Args>
+  void emplace_back(Args&&... args) {
     if (size == capacity) {
       resize(capacity * 2);
     }
@@ -121,18 +146,17 @@ public:
     ++size;
   }
 
-  void push_back(const T &value) { emplace_back(value); }
-
-  void push_back(T &&value) { emplace_back(std::move(value)); }
-
-  template <typename... Args> void push_back(Args &&...args) {
-    (emplace_back(std::forward<Args>(args)), ...);
+  void push_back(const T& value) {
+    emplace_back(value);
   }
 
-  void push_back(std::initializer_list<T> init) {
-    for (const auto &elem : init) {
-      emplace_back(elem);
-    }
+  void push_back(T&& value) {
+    emplace_back(std::move(value));
+  }
+
+  template <typename... Args>
+  void push_back(Args&&... args) {
+    (emplace_back(std::forward<Args>(args)), ...);
   }
 
   void pop_back() {
@@ -144,14 +168,14 @@ public:
     }
   }
 
-  T &operator[](int index) const {
+  T& operator[](int index) {
     if (index < 0 || index >= size) {
       throw out_of_range("Index out of range");
     }
     return data[index];
   }
 
-  T &back() const {
+  T& back() {
     if (size <= 0) {
       throw out_of_range("Vector is empty");
     }
