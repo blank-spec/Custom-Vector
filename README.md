@@ -63,6 +63,9 @@ int main() {
     // Create a Vector and initialize with some values
     Vector<int> vec = {1, 2, 3};
 
+    // Resize capacity
+    vec.resize(10);
+
     // Add a single element
     vec.push_back(4);
     
