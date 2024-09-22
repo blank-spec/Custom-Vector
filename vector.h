@@ -31,7 +31,7 @@ private:
 
   void resize(int newCapacity) noexcept {
     if (newCapacity > capacity) {
-      T *newData = alloc.allocate(newCapacity);
+      T* newData = AllocTraits::allocate(alloc, newCapacity);
       for (size_t i = 0; i < size; ++i) {
         AllocTraits::construct(alloc, newData + i, data[i]);
       }
