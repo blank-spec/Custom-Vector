@@ -63,8 +63,8 @@ public:
       return tmp;
     }
 
-    bool operator==(const Iterator &other) { return ptr == other.ptr; }
-    bool operator!=(const Iterator &other) { return ptr != other.ptr; }
+    bool operator==(const Iterator &other) const { return ptr == other.ptr; }
+    bool operator!=(const Iterator &other) const { return ptr != other.ptr; }
   };
 
   Vector()
@@ -144,14 +144,14 @@ public:
     }
   }
 
-  T &operator[](int index) {
+  T &operator[](int index) const {
     if (index < 0 || index >= size) {
       throw out_of_range("Index out of range");
     }
     return data[index];
   }
 
-  T &back() {
+  T &back() const {
     if (size <= 0) {
       throw out_of_range("Vector is empty");
     }
