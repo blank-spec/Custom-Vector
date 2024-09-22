@@ -64,7 +64,7 @@ int main() {
     Vector<int> vec = {1, 2, 3};
 
     // Resize capacity
-    vec.resize(10);
+    vec.reserve(10);
 
     // Add a single element
     vec.push_back(4);
