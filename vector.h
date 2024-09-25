@@ -2,9 +2,11 @@
 
 #include <algorithm>
 #include <cstddef>
+#include <format>
 #include <initializer_list>
 #include <iostream>
 #include <memory>
+#include <optional>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
@@ -96,7 +98,7 @@ class Vector {
     return {data + size};
   }
 
-  Vector() : alloc(Alloc()), size(0), capacity(1), data(AllocTraits::allocate(alloc, capacity)) {}
+  Vector() : alloc(Alloc()), size(0), capacity(5), data(AllocTraits::allocate(alloc, capacity)) {}
 
   Vector(std::initializer_list<T> init) : Vector() {
     for (const auto& elem : init) {
@@ -168,14 +170,14 @@ class Vector {
     }
   }
 
-  T& operator[](int index) {
+  T& operator[](int index) const {
     if (index < 0 || index >= size) {
       throw out_of_range("Index out of range");
     }
     return data[index];
   }
 
-  T& back() {
+  T& back() const {
     if (size <= 0) {
       throw out_of_range("Vector is empty");
     }
@@ -183,11 +185,79 @@ class Vector {
   }
 
   void print() const {
+    if (size == 0) {
+      cout << "{}" << endl;
+    }
+
     for (size_t i = 0; i < size; ++i) {
       cout << data[i] << ' ';
     }
     cout << endl;
   }
 
+  bool find(const T& element) const {
+    for (int i = 0; i < size; ++i) {
+      if (data[i] == element) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  int index(const T& element) const {
+    for (int i = 0; i < size; ++i) {
+      if (data[i] == element) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  void insert(const T& element, int index) {
+    try {
+      if (index < 0 || index >= size) {
+        throw out_of_range("Index out of bound");
+      }
+
+      if (size == capacity) {
+        resize(size * 2);
+      }
+
+      for (int i = size; i > index; --i) {
+        data[i] = std::move(data[i - 1]);
+      }
+
+      AllocTraits::construct(alloc, data + index, element);
+      size++;
+    } catch (const out_of_range& e) {
+      cout << format("While inserting elememt at index {} happend an error: ", index) << e.what() << endl;
+    }
+  }
+
+  void erase(int index) {
+    try {
+      if (index < 0 || index >= size) {
+        throw out_of_range("Index out of range");
+      } else {
+        AllocTraits::destroy(alloc, data + index);
+
+        for (int i = index; i < size; ++i) {
+          data[i] = std::move(data[i + 1]);
+        }
+        --size;
+      }
+    } catch (const out_of_range& e) {
+      cout << format("While removing elememt at index {} happend an error: ", index) << e.what() << endl;
+    }
+  }
+
+  void clear() {
+    for (int i = 0; i < size; ++i) {
+      AllocTraits::destroy(alloc, data + i);
+    }
+    size = 0;
+  }
+
   int getSize() const { return size; }
+  int getCapacity() const { return capacity; }
 };
