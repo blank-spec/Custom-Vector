@@ -56,12 +56,12 @@ You can add elements to the vector using:
 
 *Erase Element by index*
 ```cpp
-vec.erase(2) // removing element on index 2
+vec.erase(2); // removing element on index 2
 ```
 
 *Insert element by index*
 ```cpp
-vec.insert(10, 2) // inserting element on index 2
+vec.insert(10, 2); // inserting element on index 2
 ```
 
 
@@ -90,13 +90,13 @@ int main() {
     // Remove the last element
     vec.pop_back();
 
-    vec.insert(10, 2) // now vec = {1, 2, 10, 3, 4, 5, 6, 7}
-    vec.erase(3) // now vec = {1, 2, 10, 4, 5, 6, 7}
-    int index = vec.index(10) // find element and return it index, now index = 2;
-    bool find = vec.find(11) // find element in vector, now find = false;
+    vec.insert(10, 2); // now vec = {1, 2, 10, 3, 4, 5, 6, 7}
+    vec.erase(3); // now vec = {1, 2, 10, 4, 5, 6, 7}
+    int index = vec.index(10); // find element and return it index, now index = 2;
+    bool find = vec.find(11); // find element in vector, now find = false;
 
     // You can combine the methods
-    vec.erase(vec.index(10)) // firts, finding index of element, than it will be remove by it index
+    vec.erase(vec.index(10)); // firts, finding index of element, than it will be remove by it index
 
     // Print the updated state of the vector
     vec.print(); // Output: 1 2 4 5 6 7 
