@@ -69,7 +69,7 @@ vec.insert(10, 2); // inserting element on index 2
 ### Example
 Here’s an example demonstrating how to use the Vector class:
   ```cpp
-  #include "Vector.h"
+  #include "vector.h"
 
 int main() {
     // Create a Vector and initialize with some values
