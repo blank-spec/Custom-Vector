@@ -260,4 +260,10 @@ class Vector {
 
   int getSize() const { return size; }
   int getCapacity() const { return capacity; }
+
+ ~Vector() {
+    clearMemory();
+    capacity = 0;
+    size = 0;
+}
 };
