@@ -214,7 +214,8 @@ public:
     Vector() : alloc(Alloc()), size(0), capacity(5), data(AllocTraits::allocate(alloc, capacity)) {}
 
     Vector(std::initializer_list<T> init) : Vector() {
-        for (const auto& elem : init) {
+        reserve(init.size());
+        for (auto&& elem : init) {
             emplace_back(elem);
         }
     }
@@ -236,17 +237,41 @@ public:
 
             size = other.size;
             capacity = other.capacity;
-            data = other.data;
+            data = exchange(other.data, nullptr);
+            alloc = move(other.alloc);
 
             other.size = 0;
-            other.capacity = 0;
-            other.data = nullptr;
+            other.cap = 0;
         }
         return *this;
     }
 
-    Vector(const Vector&) = delete;
-    Vector& operator=(const Vector&) = delete;
+    Vector(const Vector& other) noexcept {
+        capacity = other.capacity;
+        size = other.size;
+        alloc = other.alloc;
+        data = AllocTraits::allocate(alloc, capacity);
+
+        for (size_t i = 0; i < size; ++i) {
+            AllocTraits::construct(alloc, data + i, move(other.data[i]));
+        }
+    }
+
+    Vector& operator=(const Vector& other) noexcept {
+        if (this != &other) {
+            clearMemory();
+
+            size = other.size;
+            capacity = other.capacity;
+            alloc = other.alloc;
+            data = AllocTraits::allocate(alloc, capacity);
+
+            for (size_t i = 0; i < size; ++i) {
+                AllocTraits::construct(alloc, data + i, move(other.data[i]));
+            }
+        }
+        return *this;
+    }
 
     void reserve(int newCapacity) {
         if (newCapacity > capacity) {
