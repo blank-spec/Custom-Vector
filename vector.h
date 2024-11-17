@@ -6,12 +6,18 @@
 #include <initializer_list>
 #include <iostream>
 #include <memory>
-#include <optional>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <utility>
 using namespace std;
+
+class BaseIterator {
+public:
+    virtual bool operator==(const BaseIterator& other) const = 0;
+    virtual bool operator!=(const BaseIterator& other) const = 0;
+    virtual ~BaseIterator() = default;
+};
 
 template <typename T, class Alloc = allocator<T>>
 class Vector {
@@ -33,6 +39,7 @@ private:
         data = nullptr;
     }
 
+public:
     void resize(int newCapacity) noexcept {
         if (newCapacity > capacity) {
             T* newData = AllocTraits::allocate(alloc, newCapacity);
@@ -45,7 +52,6 @@ private:
         }
     }
 
-public:
     template <bool isConst>
     class baseIterator {
     private:
@@ -118,7 +124,7 @@ public:
         T* ptr;
 
     public:
-        reverseIterator(T* p) : ptr(p) {}
+        explicit  reverseIterator(T* p) : ptr(p) {}
 
         using pointerType = conditional_t<isConst, const T*, T*>;
         using referenceType = conditional_t<isConst, const T&, T&>;
@@ -211,7 +217,7 @@ public:
         return { data - 1 };
     }
 
-    Vector() : alloc(Alloc()), size(0), capacity(5), data(AllocTraits::allocate(alloc, capacity)) {}
+    Vector() : capacity(10), size(0), data(AllocTraits::allocate(alloc, capacity)), alloc(Alloc()) {}
 
     Vector(std::initializer_list<T> init) : Vector() {
         reserve(init.size());
@@ -220,7 +226,25 @@ public:
         }
     }
 
-    Vector(int size) : alloc(Alloc()), size(size), capacity(size * 2), data(AllocTraits::allocate(alloc, capacity)) {}
+    Vector(const int initial_size, const T& default_value)
+        : capacity(initial_size * 2),
+        size(initial_size),
+        data(AllocTraits::allocate(alloc, capacity)),
+        alloc(Alloc()) {
+        for (int i = 0; i < size; ++i) {
+            AllocTraits::construct(alloc, data + i, default_value);
+        }
+    }
+
+    Vector(const int initial_size)
+        : capacity(initial_size),
+        size(initial_size),
+        data(AllocTraits::allocate(alloc, capacity)),
+        alloc(Alloc()) {
+        for (size_t i = 0; i < size; ++i) {
+            AllocTraits::construct(alloc, data + i, T());
+        }
+    }
 
     ~Vector() { clearMemory(); }
 
@@ -241,7 +265,7 @@ public:
             alloc = move(other.alloc);
 
             other.size = 0;
-            other.cap = 0;
+            other.capacity = 0;
         }
         return *this;
     }
@@ -313,9 +337,6 @@ public:
     }
 
     T& operator[](int index) const {
-        if (index < 0 || index >= size) {
-            throw out_of_range("Index out of range");
-        }
         return data[index];
     }
 
@@ -378,22 +399,20 @@ public:
     }
 
     void erase(int index) {
-        try {
-            if (index < 0 || index >= size) {
-                throw out_of_range("Index out of range");
-            }
-            else {
-                AllocTraits::destroy(alloc, data + index);
+        if (index < 0 || index >= size) {
+            throw out_of_range("Index out of range");
+        }
+        else {
+            std::rotate(data + index, data + index + 1, data + size);
+            AllocTraits::destroy(alloc, data + size - 1);
+            /*swap(data[index], data[size - 1]);
+            AllocTraits::destroy(alloc, data[size - 1]);*/
+            --size;
+        }
+    }
 
-                for (int i = index; i < size; ++i) {
-                    data[i] = std::move(data[i + 1]);
-                }
-                --size;
-            }
-        }
-        catch (const out_of_range& e) {
-            cout << format("While removing elememt at index {} happend an error: ", index) << e.what() << endl;
-        }
+    bool empty() const {
+        return size == 0;
     }
 
     void clear() {
@@ -403,6 +422,6 @@ public:
         size = 0;
     }
 
-    int getSize() const { return size; }
-    int getCapacity() const { return capacity; }
+    [[nodiscard]] int getSize() const { return size; }
+    [[nodiscard]] int getCapacity() const { return capacity; }
 };
