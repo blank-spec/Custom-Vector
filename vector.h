@@ -12,13 +12,6 @@
 #include <utility>
 using namespace std;
 
-class BaseIterator {
-public:
-    virtual bool operator==(const BaseIterator& other) const = 0;
-    virtual bool operator!=(const BaseIterator& other) const = 0;
-    virtual ~BaseIterator() = default;
-};
-
 template <typename T, class Alloc = allocator<T>>
 class Vector {
 private:
