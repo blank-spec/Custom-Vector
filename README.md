@@ -106,7 +106,7 @@ int main() {
     vec.push_back(4);
     
     // Add multiple elements
-    vec.push_back(5, 6, 7); // Adds 5, 6, and 7 to the vector
+    vec.push_back({5, 6, 7}); // Adds 5, 6, and 7 to the vector
     
     // Print the current state of the vector
     vec.print(); // Output: 1 2 3 4 5 6 7
