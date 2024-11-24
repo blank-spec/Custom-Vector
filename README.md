@@ -10,6 +10,7 @@ The `Vector` class is a dynamic array implementation in C++, providing a flexibl
 - **Custom Allocators**: Supports custom memory allocators through template parameters.
 - **Multiple Element Addition**: Easily add multiple elements using `push_back` with initializer lists or variadic templates.
 - **Iterators**: Provides a simple iterator interface for range-based loops.
+- **Full integration with ```std::algorithm```**
 
 ## Usage
 
