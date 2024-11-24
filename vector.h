@@ -89,7 +89,7 @@ public:
         , data(nullptr)
         , alloc(allocator) {
         check_size(count);
-        data = AllocTraits::allocate(alloc, count);
+        data = AllocTraits::allocate(allocator, count);
         try {
             std::uninitialized_fill_n(data, count, value);
             size = count;
@@ -106,7 +106,7 @@ public:
         , data(nullptr)
         , alloc(allocator) {
         check_size(count);
-        data = AllocTraits::allocate(alloc, count);
+        data = AllocTraits::allocate(allocator, count);
         try {
             std::uninitialized_default_construct_n(data, count);
             size = count;
