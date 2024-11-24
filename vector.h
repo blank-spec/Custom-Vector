@@ -33,21 +33,22 @@ private:
     }
 
     void resize(size_t newCapacity) {
-        T* newData = AllocTraits::allocate(alloc, newCapacity);
+        size_t newCap = std::max(newCapacity, capacity + (capacity >> 1));
+        T* newData = AllocTraits::allocate(alloc, newCap);
         size_t oldSize = size;
 
         try {
             std::uninitialized_move_n(data, size, newData);
         }
         catch (...) {
-            AllocTraits::deallocate(alloc, newData, newCapacity);
+            AllocTraits::deallocate(alloc, newData, newCap);
             throw;
         }
 
         clearMemory();
         data = newData;
         size = oldSize;
-        capacity = newCapacity;
+        capacity = newCap;
     }
 
     template<typename... Args>
@@ -189,7 +190,7 @@ public:
         }
     }
 
-    [[nodiscard]] allocator<T> get_allocator() const noexcept {
+    [[nodiscard]] allocator_type get_allocator() const noexcept {
         return alloc;
     }
 
@@ -408,19 +409,19 @@ public:
 
     Iterator begin() noexcept { return Iterator(data); }
     Iterator end() noexcept { return Iterator(data + size); }
-
+    
     ConstIterator begin() const noexcept { return ConstIterator(data); }
     ConstIterator end() const noexcept { return ConstIterator(data + size); }
-
+    
     ConstIterator cbegin() const noexcept { return ConstIterator(data); }
     ConstIterator cend() const noexcept { return ConstIterator(data + size); }
 
     RIterator rbegin() noexcept { return RIterator(data + size - 1); }
     RIterator rend() noexcept { return RIterator(data - 1); }
-
+    
     ConstRIterator rbegin() const noexcept { return ConstRIterator(data + size - 1); }
     ConstRIterator rend() const noexcept { return ConstRIterator(data - 1); }
-
+    
     ConstRIterator crbegin() const noexcept { return ConstRIterator(data + size - 1); }
     ConstRIterator crend() const noexcept { return ConstRIterator(data - 1); }
 
@@ -466,7 +467,10 @@ public:
     }
 
     T& operator[](int index) const {
-        return data[index];
+        if ([[likely]](static_cast<size_t>(index) < size)) {
+            return data[index];
+        }
+        throw std::out_of_range("Index out of bounds");
     }
 
     T& back() const {
@@ -488,21 +492,12 @@ public:
     }
 
     bool find(const T& element) const {
-        for (int i = 0; i < size; ++i) {
-            if (data[i] == element) {
-                return true;
-            }
-        }
-        return false;
+        return std::find(data, data + size, element) != data + size;
     }
 
     int index(const T& element) const {
-        for (int i = 0; i < size; ++i) {
-            if (data[i] == element) {
-                return i;
-            }
-        }
-        return -1;
+        auto it = std::find(data, data + size, element);
+        return it != data + size ? static_cast<int>(it - data) : -1;
     }
 
     void insert(const T& element, size_t index) {
@@ -511,7 +506,8 @@ public:
         }
 
         if (size == capacity) {
-            resize(capacity * 2);
+            size_t newCapacity = capacity == 0 ? 1 : capacity + (capacity >> 1);
+            reserve(newCapacity);
         }
 
         if (index < size) {
@@ -522,15 +518,63 @@ public:
         ++size;
     }
 
-    void erase(int index) {
-        if (index < 0 || index >= size) {
+    void erase(size_t index) {
+        if (index >= size) {
             throw out_of_range("Index out of range");
         }
-        else {
-            std::rotate(data + index, data + index + 1, data + size);
-            AllocTraits::destroy(alloc, data + size - 1);
-            --size;
+        std::move(data + index + 1, data + size, data + index);
+        AllocTraits::destroy(alloc, data + size - 1);
+        --size;
+    }
+
+    Iterator erase(Iterator pos) {
+        if (pos >= end() || pos < begin()) {
+            throw std::out_of_range("Iterator out of range");
         }
+        
+        auto index = std::distance(begin(), pos);
+        std::move(pos + 1, end(), pos);
+        --size;
+        AllocTraits::destroy(alloc, data + size);
+        return Iterator(data + index);
+    }
+
+    void erase(size_t first_index, size_t last_index) {
+        if (first_index > last_index || last_index > size) {
+            throw out_of_range("Invalid index range");
+        }
+        
+        if (first_index == last_index) {
+            return ;
+        }
+        
+        auto count = last_index - first_index;
+        std::move(data + last_index, data + size, data + first_index);
+        
+        for (size_t i = 0; i < count; ++i) {
+            AllocTraits::destroy(alloc, data + size - 1 - i);
+        }
+        size -= count;
+    }
+
+    Iterator erase(Iterator first, Iterator last) {
+        if (first > last || first < begin() || last > end()) {
+            throw std::out_of_range("Invalid iterator range");
+        }
+        
+        if (first == last) {
+            return first;
+        }
+        
+        auto index = std::distance(begin(), first);
+        auto count = std::distance(first, last);
+        
+        std::move(last, end(), first);
+        for (auto it = end() - count; it != end(); ++it) {
+            AllocTraits::destroy(alloc, std::addressof(*it));
+        }
+        size -= count;
+        return Iterator(data + index);
     }
 
     [[nodiscard]] bool empty() const noexcept {
@@ -568,10 +612,15 @@ public:
 
     void shrink_to_fit() {
         if (size < capacity) {
-            T* newData = AllocTraits::allocate(alloc, size);
-            for (size_t i = 0; i < size; ++i) {
-                create_object(newData + i, std::move(data[i]));
+            if constexpr (std::is_trivially_copyable_v<T>) {
+                if (T* newData = static_cast<T*>(std::realloc(data, size * sizeof(T)))) {
+                    data = newData;
+                    capacity = size;
+                    return;
+                }
             }
+            T* newData = AllocTraits::allocate(alloc, size);
+            std::uninitialized_move_n(data, size, newData);
             clearMemory();
             data = newData;
             capacity = size;
