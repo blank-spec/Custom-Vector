@@ -12,6 +12,29 @@ The `Vector` class is a dynamic array implementation in C++, providing a flexibl
 - **Iterators**: Provides a simple iterator interface for range-based loops.
 - **Full integration with ```std::algorithm```**
 
+## Tests
+
+### === Performance Tests ===
+- Push back 1000000 elements:
+- Custom vector: 8.089ms
+- STD vector: 11.176ms
+- Ratio (custom/std): 0.723783
+
+#### Pop back 1000000 elements:
+- Custom vector: 5.112ms
+- STD vector: 3.723ms
+- Ratio (custom/std): 1.37309
+
+#### Random access 1000000 elements:
+- Custom vector: 53.169ms
+- STD vector: 61.665ms
+- Ratio (custom/std): 0.862223
+
+#### Mixed operations test:
+- Custom vector: 6.996ms
+- STD vector: 8.727ms
+- Ratio (custom/std): 0.80165
+
 ## Usage
 
 ### Constructor
@@ -37,7 +60,7 @@ You can add elements to the vector using:
   ```
 *Multiple Elements*: You can also use push_back with an initializer list or by passing multiple arguments.
   ```cpp
-  vec.push_back(6, 7, 8); // Adds 6, 7, and 8 to the vector
+  vec.push_back({6, 7, 8}); // Adds 6, 7, and 8 to the vector
   ```
 *emplace_back*: Construct and add elements in place.
   ```cpp
