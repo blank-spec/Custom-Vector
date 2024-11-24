@@ -80,7 +80,7 @@ public:
     explicit Vector(const Alloc& allocator) noexcept
         : capacity(10)
         , size(0)
-        , data(AllocTraits::allocate(alloc, capacity, data))
+        , data(AllocTraits::allocate(allocator, capacity, data))
         , alloc(allocator) {}
 
     Vector(size_t count, const T& value, const Alloc& allocator = Alloc())
