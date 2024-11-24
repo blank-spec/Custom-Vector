@@ -15,282 +15,418 @@ using namespace std;
 template <typename T, class Alloc = allocator<T>>
 class Vector {
 private:
-    unsigned int capacity;
+    size_t capacity;
     size_t size;
     T* data;
-    Alloc alloc;
+    [[no_unique_address]] Alloc alloc;
 
     using AllocTraits = allocator_traits<Alloc>;
 
-    void clearMemory() {
+    void clearMemory() noexcept {
         if (data) {
-            for (size_t i = 0; i < size; ++i) {
-                AllocTraits::destroy(alloc, data + i);
-            }
+            std::destroy_n(data, size);
+            AllocTraits::deallocate(alloc, data, capacity);
+            data = nullptr;
+            size = 0;
+            capacity = 0;
         }
-        AllocTraits::deallocate(alloc, data, capacity);
-        data = nullptr;
+    }
+
+    void resize(size_t newCapacity) {
+        T* newData = AllocTraits::allocate(alloc, newCapacity);
+        size_t oldSize = size;
+
+        try {
+            std::uninitialized_move_n(data, size, newData);
+        }
+        catch (...) {
+            AllocTraits::deallocate(alloc, newData, newCapacity);
+            throw;
+        }
+
+        clearMemory();
+        data = newData;
+        size = oldSize;
+        capacity = newCapacity;
+    }
+
+    template<typename... Args>
+    T* create_object(T* where, Args&&... args) {
+        try {
+            AllocTraits::construct(alloc, where, std::forward<Args>(args)...);
+            return where;
+        }
+        catch (...) {
+            throw;
+        }
+    }
+
+    void check_size(size_t new_size) const {
+        if (new_size > AllocTraits::max_size(alloc)) {
+            throw length_error("Vector size would exceed maximum allocation size");
+        }
     }
 
 public:
-    void resize(int newCapacity) noexcept {
-        if (newCapacity > capacity) {
-            T* newData = AllocTraits::allocate(alloc, newCapacity);
-            for (size_t i = 0; i < size; ++i) {
-                AllocTraits::construct(alloc, newData + i, data[i]);
+    Vector() noexcept(noexcept(Alloc()))
+        : capacity(0)
+        , size(0)
+        , data(nullptr)
+        , alloc(Alloc()) {}
+
+    explicit Vector(const Alloc& allocator) noexcept
+        : capacity(0)
+        , size(0)
+        , data(nullptr)
+        , alloc(allocator) {}
+
+    Vector(size_t count, const T& value, const Alloc& allocator = Alloc())
+        : capacity(count)
+        , size(0)
+        , data(nullptr)
+        , alloc(allocator) {
+        check_size(count);
+        data = AllocTraits::allocate(alloc, count);
+        try {
+            std::uninitialized_fill_n(data, count, value);
+            size = count;
+        }
+        catch (...) {
+            AllocTraits::deallocate(alloc, data, count);
+            throw;
+        }
+    }
+
+    explicit Vector(size_t count, const Alloc& allocator = Alloc())
+        : capacity(count)
+        , size(0)
+        , data(nullptr)
+        , alloc(allocator) {
+        check_size(count);
+        data = AllocTraits::allocate(alloc, count);
+        try {
+            std::uninitialized_default_construct_n(data, count);
+            size = count;
+        }
+        catch (...) {
+            AllocTraits::deallocate(alloc, data, count);
+            throw;
+        }
+    }
+
+    Vector(const Vector& other)
+        : capacity(other.size)
+        , size(0)
+        , data(nullptr)
+        , alloc(AllocTraits::select_on_container_copy_construction(other.alloc)) {
+        data = AllocTraits::allocate(alloc, other.size);
+        try {
+            std::uninitialized_copy_n(other.data, other.size, data);
+            size = other.size;
+        }
+        catch (...) {
+            AllocTraits::deallocate(alloc, data, other.size);
+            throw;
+        }
+    }
+
+    Vector& operator=(const Vector& other) {
+        if (this != &other) {
+            if (AllocTraits::propagate_on_container_copy_assignment::value && alloc != other.alloc) {
+                Vector tmp(other);
+                swap(tmp);
             }
-            clearMemory();
-            data = newData;
-            capacity = newCapacity;
+            else {
+                Vector tmp(other, alloc);
+                swap(tmp);
+            }
         }
+        return *this;
     }
-
-    template <bool isConst>
-    class baseIterator {
-    private:
-        T* ptr;
-
-    public:
-        baseIterator(T* p) : ptr(p) {}
-
-        using pointerType = conditional_t<isConst, const T*, T*>;
-        using referenceType = conditional_t<isConst, const T&, T&>;
-        using valueType = T;
-        using difference_type = ptrdiff_t;
-        using iterator_category = random_access_iterator_tag;
-
-        baseIterator(const baseIterator&) = default;
-        baseIterator& operator=(const baseIterator&) = default;
-
-        referenceType operator*() const { return *ptr; }
-        pointerType operator->() const { return ptr; }
-
-        referenceType operator[](difference_type n) const {
-            return *(ptr + n);
-        }
-
-        baseIterator& operator++() {
-            ++ptr;
-            return *this;
-        }
-
-        baseIterator operator++(int) {
-            baseIterator tmp = *this;
-            ++ptr;
-            return tmp;
-        }
-
-        baseIterator& operator--() {
-            --ptr;
-            return *this;
-        }
-
-        baseIterator operator--(int) {
-            baseIterator tmp = *this;
-            --ptr;
-            return tmp;
-        }
-
-        baseIterator operator-(difference_type n) const {
-            return baseIterator(ptr - n);
-        }
-
-        baseIterator operator+(difference_type n) const {
-            return baseIterator(ptr + n);
-        }
-
-        difference_type operator-(const baseIterator& other) const {
-            return ptr - other.ptr;
-        }
-
-        bool operator==(const baseIterator& other) const { return ptr == other.ptr; }
-        bool operator!=(const baseIterator& other) const { return ptr != other.ptr; }
-        bool operator<(const baseIterator& other) const { return ptr < other.ptr; }
-        bool operator<=(const baseIterator& other) const { return ptr <= other.ptr; }
-        bool operator>(const baseIterator& other) const { return ptr > other.ptr; }
-        bool operator>=(const baseIterator& other) const { return ptr >= other.ptr; }
-    };
-
-    template <bool isConst>
-    class reverseIterator {
-    private:
-        T* ptr;
-
-    public:
-        explicit  reverseIterator(T* p) : ptr(p) {}
-
-        using pointerType = conditional_t<isConst, const T*, T*>;
-        using referenceType = conditional_t<isConst, const T&, T&>;
-        using valueType = T;
-        using difference_type = ptrdiff_t;
-        using iterator_category = random_access_iterator_tag;
-
-        reverseIterator(const reverseIterator&) = default;
-        reverseIterator& operator=(const reverseIterator&) = default;
-
-        referenceType operator*() const { return *ptr; }
-        pointerType operator->() const { return ptr; }
-
-        referenceType operator[](difference_type n) const {
-            return *(ptr - n);
-        }
-
-        reverseIterator& operator++() {
-            --ptr;
-            return *this;
-        }
-
-        reverseIterator operator++(int) {
-            reverseIterator tmp = *this;
-            --ptr;
-            return tmp;
-        }
-
-        reverseIterator& operator--() {
-            ++ptr;
-            return *this;
-        }
-
-        reverseIterator operator--(int) {
-            reverseIterator tmp = *this;
-            ++ptr;
-            return tmp;
-        }
-
-        reverseIterator operator-(difference_type n) const {
-            return reverseIterator(ptr + n);
-        }
-
-        reverseIterator operator+(difference_type n) const {
-            return reverseIterator(ptr - n);
-        }
-
-        bool operator==(const reverseIterator& other) const { return ptr == other.ptr; }
-        bool operator!=(const reverseIterator& other) const { return ptr != other.ptr; }
-        bool operator<(const reverseIterator& other) const { return ptr < other.ptr; }
-        bool operator<=(const reverseIterator& other) const { return ptr <= other.ptr; }
-        bool operator>(const reverseIterator& other) const { return ptr > other.ptr; }
-        bool operator>=(const reverseIterator& other) const { return ptr >= other.ptr; }
-    };
-
-    using Iterator = baseIterator<false>;
-    using constIterator = baseIterator<true>;
-    using RIterator = reverseIterator<false>;
-    using constRIterator = reverseIterator<true>;
-
-    Iterator begin() {
-        return { data };
-    }
-
-    Iterator end() {
-        return { data + size };
-    }
-
-    constIterator begin() const {
-        return { data };
-    }
-
-    constIterator end() const {
-        return { data + size };
-    }
-    
-    RIterator rbegin() {
-        return { data + size - 1 };
-    }
-
-    constRIterator rbegin() const {
-        return { data + size - 1};
-    }
-
-    RIterator rend() {
-        return { data - 1 };
-    }
-
-    constRIterator rend() const {
-        return { data - 1 };
-    }
-
-    Vector() : capacity(10), size(0), data(AllocTraits::allocate(alloc, capacity)), alloc(Alloc()) {}
-
-    Vector(std::initializer_list<T> init) : Vector() {
-        reserve(init.size());
-        for (auto&& elem : init) {
-            emplace_back(elem);
-        }
-    }
-
-    Vector(const int initial_size, const T& default_value)
-        : capacity(initial_size * 2),
-        size(initial_size),
-        data(AllocTraits::allocate(alloc, capacity)),
-        alloc(Alloc()) {
-        for (int i = 0; i < size; ++i) {
-            AllocTraits::construct(alloc, data + i, default_value);
-        }
-    }
-
-    Vector(const int initial_size)
-        : capacity(initial_size),
-        size(initial_size),
-        data(AllocTraits::allocate(alloc, capacity)),
-        alloc(Alloc()) {
-        for (size_t i = 0; i < size; ++i) {
-            AllocTraits::construct(alloc, data + i, T());
-        }
-    }
-
-    ~Vector() { clearMemory(); }
 
     Vector(Vector&& other) noexcept
-        : size(other.size), capacity(other.capacity), data(other.data) {
-        other.size = 0;
-        other.capacity = 0;
-        other.data = nullptr;
-    }
+        : capacity(std::exchange(other.capacity, 0))
+        , size(std::exchange(other.size, 0))
+        , data(std::exchange(other.data, nullptr))
+        , alloc(std::move(other.alloc)) {}
 
     Vector& operator=(Vector&& other) noexcept {
         if (this != &other) {
             clearMemory();
-
-            size = other.size;
-            capacity = other.capacity;
-            data = exchange(other.data, nullptr);
-            alloc = move(other.alloc);
-
-            other.size = 0;
-            other.capacity = 0;
-        }
-        return *this;
-    }
-
-    Vector(const Vector& other) noexcept {
-        capacity = other.capacity;
-        size = other.size;
-        alloc = other.alloc;
-        data = AllocTraits::allocate(alloc, capacity);
-
-        for (size_t i = 0; i < size; ++i) {
-            AllocTraits::construct(alloc, data + i, move(other.data[i]));
-        }
-    }
-
-    Vector& operator=(const Vector& other) noexcept {
-        if (this != &other) {
-            clearMemory();
-
-            size = other.size;
-            capacity = other.capacity;
-            alloc = other.alloc;
-            data = AllocTraits::allocate(alloc, capacity);
-
-            for (size_t i = 0; i < size; ++i) {
-                AllocTraits::construct(alloc, data + i, move(other.data[i]));
+            capacity = std::exchange(other.capacity, 0);
+            size = std::exchange(other.size, 0);
+            data = std::exchange(other.data, nullptr);
+            if (AllocTraits::propagate_on_container_move_assignment::value) {
+                alloc = std::move(other.alloc);
             }
         }
         return *this;
     }
 
-    void reserve(int newCapacity) {
+    Vector(std::initializer_list<T> init, const Alloc& allocator = Alloc())
+        : capacity(init.size())
+        , size(0)
+        , data(nullptr)
+        , alloc(allocator) {
+        data = AllocTraits::allocate(alloc, init.size());
+        try {
+            std::uninitialized_copy(init.begin(), init.end(), data);
+            size = init.size();
+        }
+        catch (...) {
+            AllocTraits::deallocate(alloc, data, init.size());
+            throw;
+        }
+    }
+
+    void swap(Vector& other) noexcept {
+        using std::swap;
+        swap(size, other.size);
+        swap(capacity, other.capacity);
+        swap(data, other.data);
+        if (AllocTraits::propagate_on_container_swap::value) {
+            swap(alloc, other.alloc);
+        }
+    }
+
+    [[nodiscard]] allocator<T> get_allocator() const noexcept {
+        return alloc;
+    }
+
+    template <bool isConst>
+    class baseIterator {
+    public:
+        using iterator_category = std::random_access_iterator_tag;
+        using value_type = T;
+        using difference_type = std::ptrdiff_t;
+        using pointer = std::conditional_t<isConst, const T*, T*>;
+        using reference = std::conditional_t<isConst, const T&, T&>;
+
+    private:
+        T* ptr;
+
+    public:
+        baseIterator(T* p = nullptr) noexcept : ptr(p) {}
+        baseIterator(const baseIterator& other) noexcept = default;
+        baseIterator& operator=(const baseIterator& other) noexcept = default;
+
+        reference operator*() const noexcept { return *ptr; }
+        pointer operator->() const noexcept { return ptr; }
+        reference operator[](difference_type n) const noexcept { return ptr[n]; }
+
+        baseIterator& operator++() noexcept {
+            ++ptr;
+            return *this;
+        }
+
+        baseIterator operator++(int) noexcept {
+            baseIterator tmp(*this);
+            ++ptr;
+            return tmp;
+        }
+
+        baseIterator& operator--() noexcept {
+            --ptr;
+            return *this;
+        }
+
+        baseIterator operator--(int) noexcept {
+            baseIterator tmp(*this);
+            --ptr;
+            return tmp;
+        }
+
+        baseIterator& operator+=(difference_type n) noexcept {
+            ptr += n;
+            return *this;
+        }
+
+        baseIterator operator+(difference_type n) const noexcept {
+            baseIterator tmp(*this);
+            tmp += n;
+            return tmp;
+        }
+
+        baseIterator& operator-=(difference_type n) noexcept {
+            ptr -= n;
+            return *this;
+        }
+
+        baseIterator operator-(difference_type n) const noexcept {
+            baseIterator tmp(*this);
+            tmp -= n;
+            return tmp;
+        }
+
+        difference_type operator-(const baseIterator& other) const noexcept {
+            return ptr - other.ptr;
+        }
+
+        bool operator==(const baseIterator& other) const noexcept {
+            return ptr == other.ptr;
+        }
+
+        bool operator!=(const baseIterator& other) const noexcept {
+            return !(*this == other);
+        }
+
+        bool operator<(const baseIterator& other) const noexcept {
+            return ptr < other.ptr;
+        }
+
+        bool operator>(const baseIterator& other) const noexcept {
+            return other < *this;
+        }
+
+        bool operator<=(const baseIterator& other) const noexcept {
+            return !(other < *this);
+        }
+
+        bool operator>=(const baseIterator& other) const noexcept {
+            return !(*this < other);
+        }
+    };
+
+    friend baseIterator<false> operator+(typename baseIterator<false>::difference_type n,
+                                       const baseIterator<false>& it) noexcept {
+        return it + n;
+    }
+
+    friend baseIterator<true> operator+(typename baseIterator<true>::difference_type n,
+                                      const baseIterator<true>& it) noexcept {
+        return it + n;
+    }
+
+    template <bool isConst>
+    class reverseIterator {
+    public:
+        using iterator_category = std::random_access_iterator_tag;
+        using value_type = T;
+        using difference_type = std::ptrdiff_t;
+        using pointer = std::conditional_t<isConst, const T*, T*>;
+        using reference = std::conditional_t<isConst, const T&, T&>;
+
+    private:
+        T* ptr;
+
+    public:
+        reverseIterator(T* p = nullptr) noexcept : ptr(p) {}
+        reverseIterator(const reverseIterator& other) noexcept = default;
+        reverseIterator& operator=(const reverseIterator& other) noexcept = default;
+
+        reference operator*() const noexcept { return *ptr; }
+        pointer operator->() const noexcept { return ptr; }
+        reference operator[](difference_type n) const noexcept { return ptr[-n]; }
+
+        reverseIterator& operator++() noexcept {
+            --ptr;
+            return *this;
+        }
+
+        reverseIterator operator++(int) noexcept {
+            reverseIterator tmp(*this);
+            --ptr;
+            return tmp;
+        }
+
+        reverseIterator& operator--() noexcept {
+            ++ptr;
+            return *this;
+        }
+
+        reverseIterator operator--(int) noexcept {
+            reverseIterator tmp(*this);
+            ++ptr;
+            return tmp;
+        }
+
+        reverseIterator& operator+=(difference_type n) noexcept {
+            ptr -= n;
+            return *this;
+        }
+
+        reverseIterator operator+(difference_type n) const noexcept {
+            reverseIterator tmp(*this);
+            tmp += n;
+            return tmp;
+        }
+
+        reverseIterator& operator-=(difference_type n) noexcept {
+            ptr += n;
+            return *this;
+        }
+
+        reverseIterator operator-(difference_type n) const noexcept {
+            reverseIterator tmp(*this);
+            tmp -= n;
+            return tmp;
+        }
+
+        difference_type operator-(const reverseIterator& other) const noexcept {
+            return other.ptr - ptr;
+        }
+
+        bool operator==(const reverseIterator& other) const noexcept {
+            return ptr == other.ptr;
+        }
+
+        bool operator!=(const reverseIterator& other) const noexcept {
+            return !(*this == other);
+        }
+
+        bool operator<(const reverseIterator& other) const noexcept {
+            return ptr > other.ptr;
+        }
+
+        bool operator>(const reverseIterator& other) const noexcept {
+            return other < *this;
+        }
+
+        bool operator<=(const reverseIterator& other) const noexcept {
+            return !(other < *this);
+        }
+
+        bool operator>=(const reverseIterator& other) const noexcept {
+            return !(*this < other);
+        }
+    };
+
+    friend reverseIterator<false> operator+(typename reverseIterator<false>::difference_type n,
+                                          const reverseIterator<false>& it) noexcept {
+        return it + n;
+    }
+
+    friend reverseIterator<true> operator+(typename reverseIterator<true>::difference_type n,
+                                         const reverseIterator<true>& it) noexcept {
+        return it + n;
+    }
+
+    using Iterator = baseIterator<false>;
+    using ConstIterator = baseIterator<true>;
+    using RIterator = reverseIterator<false>;
+    using ConstRIterator = reverseIterator<true>;
+
+    Iterator begin() noexcept { return Iterator(data); }
+    Iterator end() noexcept { return Iterator(data + size); }
+
+    ConstIterator begin() const noexcept { return ConstIterator(data); }
+    ConstIterator end() const noexcept { return ConstIterator(data + size); }
+
+    ConstIterator cbegin() const noexcept { return ConstIterator(data); }
+    ConstIterator cend() const noexcept { return ConstIterator(data + size); }
+
+    RIterator rbegin() noexcept { return RIterator(data + size - 1); }
+    RIterator rend() noexcept { return RIterator(data - 1); }
+
+    ConstRIterator rbegin() const noexcept { return ConstRIterator(data + size - 1); }
+    ConstRIterator rend() const noexcept { return ConstRIterator(data - 1); }
+
+    ConstRIterator crbegin() const noexcept { return ConstRIterator(data + size - 1); }
+    ConstRIterator crend() const noexcept { return ConstRIterator(data - 1); }
+
+    ~Vector() { clearMemory(); }
+
+    void reserve(size_t newCapacity) {
         if (newCapacity > capacity) {
             resize(newCapacity);
         }
@@ -301,7 +437,7 @@ public:
         if (size == capacity) {
             resize(capacity * 2);
         }
-        AllocTraits::construct(alloc, data + size, std::forward<Args>(args)...);
+        create_object(data + size, std::forward<Args>(args)...);
         ++size;
     }
 
@@ -369,26 +505,21 @@ public:
         return -1;
     }
 
-    void insert(const T& element, int index) {
-        try {
-            if (index < 0 || index > size) {
-                throw out_of_range("Index out of bound");
-            }
-
-            if (size == capacity) {
-                resize(size * 2);
-            }
-
-            for (int i = size; i > index; --i) {
-                data[i] = std::move(data[i - 1]);
-            }
-
-            AllocTraits::construct(alloc, data + index, element);
-            size++;
+    void insert(const T& element, size_t index) {
+        if (index > size) {
+            throw out_of_range(format("Index {} out of range (size: {})", index, size));
         }
-        catch (const out_of_range& e) {
-            cout << format("While inserting elememt at index {} happend an error: ", index) << e.what() << endl;
+
+        if (size == capacity) {
+            resize(capacity * 2);
         }
+
+        if (index < size) {
+            std::move_backward(data + index, data + size, data + size + 1);
+        }
+
+        create_object(data + index, element);
+        ++size;
     }
 
     void erase(int index) {
@@ -398,13 +529,11 @@ public:
         else {
             std::rotate(data + index, data + index + 1, data + size);
             AllocTraits::destroy(alloc, data + size - 1);
-            /*swap(data[index], data[size - 1]);
-            AllocTraits::destroy(alloc, data[size - 1]);*/
             --size;
         }
     }
 
-    bool empty() const {
+    [[nodiscard]] bool empty() const noexcept {
         return size == 0;
     }
 
@@ -415,6 +544,37 @@ public:
         size = 0;
     }
 
-    [[nodiscard]] int getSize() const { return size; }
-    [[nodiscard]] int getCapacity() const { return capacity; }
+    [[nodiscard]] size_t getSize() const noexcept {
+        return size;
+    }
+
+    [[nodiscard]] size_t getCapacity() const noexcept {
+        return capacity;
+    }
+
+    [[nodiscard]] T& at(size_t index) {
+        if (index >= size) {
+            throw out_of_range(format("Index {} out of range (size: {})", index, size));
+        }
+        return data[index];
+    }
+
+    [[nodiscard]] const T& at(size_t index) const {
+        if (index >= size) {
+            throw out_of_range(format("Index {} out of range (size: {})", index, size));
+        }
+        return data[index];
+    }
+
+    void shrink_to_fit() {
+        if (size < capacity) {
+            T* newData = AllocTraits::allocate(alloc, size);
+            for (size_t i = 0; i < size; ++i) {
+                create_object(newData + i, std::move(data[i]));
+            }
+            clearMemory();
+            data = newData;
+            capacity = size;
+        }
+    }
 };
