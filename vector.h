@@ -470,6 +470,7 @@ public:
 
         if constexpr (std::is_trivially_destructible_v<T>) {
             (data + size - 1)->~T();
+            return;
         }
 
         AllocTraits::destroy(alloc, data + size);
