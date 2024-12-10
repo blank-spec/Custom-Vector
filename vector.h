@@ -130,7 +130,7 @@ public:
     }
 
     Vector(const Vector& other)
-        : capacity_(other.size_)
+        : capacity_(other.capacity_)
         , size_(0)
         , data_(nullptr)
         , alloc_(AllocTraits::select_on_container_copy_construction(other.alloc_)) {
@@ -147,14 +147,13 @@ public:
 
     Vector& operator=(const Vector& other) {
         if (this != &other) {
-            if (AllocTraits::propagate_on_container_copy_assignment::value && alloc_ != other.alloc_) {
-                Vector tmp(other);
-                swap(tmp);
-            }
-            else {
-                Vector tmp(other, alloc_);
-                swap(tmp);
-            }
+            AllocTraits::deallocate(alloc_, data_, size_);
+
+            size_ = other.size_;
+            capacity_ = other.capacity_;
+            data_ = AllocTraits::allocate(alloc_, capacity_);
+
+            std::uninitialized_copy(other.data_, other.data_ + other.size_, data_);
         }
         return *this;
     }
@@ -196,10 +195,10 @@ public:
     }
 
     void swap(Vector& other) noexcept {
-        using std::swap;
-        swap(size_, other.size_);
-        swap(capacity_, other.capacity_);
-        swap(data_, other.data_);
+        //using std::swap;
+        std::swap(size_, other.size_);
+        std::swap(capacity_, other.capacity_);
+        std::swap(data_, other.data_);
         if (AllocTraits::propagate_on_container_swap::value) {
             swap(alloc_, other.alloc_);
         }
