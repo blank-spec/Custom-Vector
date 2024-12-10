@@ -1,4 +1,5 @@
 #pragma once
+#pragma once
 
 #include <algorithm>
 #include <cstddef>
@@ -15,132 +16,143 @@ using namespace std;
 template <typename T, class Alloc = allocator<T>>
 class Vector {
 private:
-    size_t capacity;
-    size_t size;
-    T* data;
-    [[no_unique_address]] Alloc alloc;
+    size_t capacity_;
+    size_t size_;
+    T* data_;
+    [[no_unique_address]] Alloc alloc_;
 
     using AllocTraits = allocator_traits<Alloc>;
 
     void clearMemory() noexcept {
-        if (data) {
-            std::destroy_n(data, size);
-            AllocTraits::deallocate(alloc, data, capacity);
-            data = nullptr;
-            size = 0;
-            capacity = 0;
+        if (data_) {
+            std::destroy_n(data_, size_);
+            AllocTraits::deallocate(alloc_, data_, capacity_);
+            data_ = nullptr;
+            size_ = 0;
+            capacity_ = 0;
         }
     }
 
     void resize(size_t newCapacity) {
-        size_t newCap = std::max(newCapacity, capacity == 0 ? 1 : capacity + (capacity >> 1) + 1);
-        T* newData = AllocTraits::allocate(alloc, newCap);
-        size_t oldSize = size;
+        size_t newCap = std::max(newCapacity, capacity_ == 0 ? 1 : capacity_ + (capacity_ >> 1) + 1);
+        T* newData = AllocTraits::allocate(alloc_, newCap);
+        size_t oldSize = size_;
 
         if constexpr (std::is_trivially_copyable_v<T>) {
-            if (size > 0 ) {
-                memcpy(newData, data, oldSize);
+            if (size_ > 0) {
+                memcpy(newData, data_, oldSize);
             }
         }
         else {
             try {
-                uninitialized_move_n(data, size, newData);
+                uninitialized_move_n(data_, size_, newData);
             }
             catch (...) {
-                AllocTraits::deallocate(alloc, data, oldSize);
+                AllocTraits::deallocate(alloc_, data_, oldSize);
                 throw;
             }
         }
 
         clearMemory();
-        data = newData;
-        size = oldSize;
-        capacity = newCap;
+        data_ = newData;
+        size_ = oldSize;
+        capacity_ = newCap;
     }
 
     template<typename... Args>
     T* create_object(T* where, Args&&... args) {
-        AllocTraits::construct(alloc, where, std::forward<Args>(args)...);
+        AllocTraits::construct(alloc_, where, std::forward<Args>(args)...);
         return where;
     }
 
     void check_size(size_t new_size) const {
-        if (new_size > AllocTraits::max_size(alloc)) {
+        if (new_size > AllocTraits::max_size(alloc_)) {
             throw length_error("Vector size would exceed maximum allocation size");
         }
     }
 
 public:
+    using value_type = T;
+    using allocator_type = Alloc;
+    using size_type = rsize_t;
+    using difference_type = std::ptrdiff_t;
+    using reference = T&;
+    using const_reference = const T&;
+    using pointer = T*;
+    using const_pointer = const T*;
+
     Vector() noexcept(noexcept(Alloc()))
-        : capacity(10)
-        , size(0)
-        , data(AllocTraits::allocate(alloc, capacity, data))
-        , alloc(Alloc()) {}
+        : capacity_(10)
+        , size_(0)
+        , data_(AllocTraits::allocate(alloc_, capacity_, data_))
+        , alloc_(Alloc()) {
+    }
 
     explicit Vector(const Alloc& allocator) noexcept
-        : capacity(10)
-        , size(0)
-        , data(AllocTraits::allocate(allocator, capacity, data))
-        , alloc(allocator) {}
+        : capacity_(10)
+        , size_(0)
+        , data_(AllocTraits::allocate(allocator, capacity_, data_))
+        , alloc_(allocator) {
+    }
 
     Vector(size_t count, const T& value, const Alloc& allocator = Alloc())
-        : capacity(count)
-        , size(0)
-        , data(nullptr)
-        , alloc(allocator) {
+        : capacity_(count)
+        , size_(0)
+        , data_(nullptr)
+        , alloc_(allocator) {
         check_size(count);
-        data = AllocTraits::allocate(allocator, count);
+        data_ = AllocTraits::allocate(allocator, count);
         try {
-            std::uninitialized_fill_n(data, count, value);
-            size = count;
+            std::uninitialized_fill_n(data_, count, value);
+            size_ = count;
         }
         catch (...) {
-            AllocTraits::deallocate(alloc, data, count);
+            AllocTraits::deallocate(alloc_, data_, count);
             throw;
         }
     }
 
     explicit Vector(size_t count, const Alloc& allocator = Alloc())
-        : capacity(count)
-        , size(0)
-        , data(nullptr)
-        , alloc(allocator) {
+        : capacity_(count)
+        , size_(0)
+        , data_(nullptr)
+        , alloc_(allocator) {
         check_size(count);
-        data = AllocTraits::allocate(allocator, count);
+        data_ = AllocTraits::allocate(allocator, count);
         try {
-            std::uninitialized_default_construct_n(data, count);
-            size = count;
+            std::uninitialized_default_construct_n(data_, count);
+            size_ = count;
         }
         catch (...) {
-            AllocTraits::deallocate(alloc, data, count);
+            AllocTraits::deallocate(alloc_, data_, count);
             throw;
         }
     }
 
     Vector(const Vector& other)
-        : capacity(other.size)
-        , size(0)
-        , data(nullptr)
-        , alloc(AllocTraits::select_on_container_copy_construction(other.alloc)) {
-        data = AllocTraits::allocate(alloc, other.size);
+        : capacity_(other.size_)
+        , size_(0)
+        , data_(nullptr)
+        , alloc_(AllocTraits::select_on_container_copy_construction(other.alloc_)) {
+        data_ = AllocTraits::allocate(alloc_, other.size_);
         try {
-            std::uninitialized_copy_n(other.data, other.size, data);
-            size = other.size;
+            std::uninitialized_copy_n(other.data_, other.size_, data_);
+            size_ = other.size_;
         }
         catch (...) {
-            AllocTraits::deallocate(alloc, data, other.size);
+            AllocTraits::deallocate(alloc_, data_, other.size_);
             throw;
         }
     }
 
     Vector& operator=(const Vector& other) {
         if (this != &other) {
-            if (AllocTraits::propagate_on_container_copy_assignment::value && alloc != other.alloc) {
+            if (AllocTraits::propagate_on_container_copy_assignment::value && alloc_ != other.alloc_) {
                 Vector tmp(other);
                 swap(tmp);
             }
             else {
-                Vector tmp(other, alloc);
+                Vector tmp(other, alloc_);
                 swap(tmp);
             }
         }
@@ -148,52 +160,53 @@ public:
     }
 
     Vector(Vector&& other) noexcept
-        : capacity(std::exchange(other.capacity, 0))
-        , size(std::exchange(other.size, 0))
-        , data(std::exchange(other.data, nullptr))
-        , alloc(std::move(other.alloc)) {}
+        : capacity_(std::exchange(other.capacity_, 0))
+        , size_(std::exchange(other.size_, 0))
+        , data_(std::exchange(other.data_, nullptr))
+        , alloc_(std::move(other.alloc_)) {
+    }
 
     Vector& operator=(Vector&& other) noexcept {
         if (this != &other) {
             clearMemory();
-            capacity = std::exchange(other.capacity, 0);
-            size = std::exchange(other.size, 0);
-            data = std::exchange(other.data, nullptr);
+            capacity_ = std::exchange(other.capacity_, 0);
+            size_ = std::exchange(other.size_, 0);
+            data_ = std::exchange(other.data_, nullptr);
             if (AllocTraits::propagate_on_container_move_assignment::value) {
-                alloc = std::move(other.alloc);
+                alloc_ = std::move(other.alloc_);
             }
         }
         return *this;
     }
 
     Vector(std::initializer_list<T> init, const Alloc& allocator = Alloc())
-        : capacity(init.size())
-        , size(0)
-        , data(nullptr)
-        , alloc(allocator) {
-        data = AllocTraits::allocate(alloc, init.size());
+        : capacity_(init.size())
+        , size_(0)
+        , data_(nullptr)
+        , alloc_(allocator) {
+        data_ = AllocTraits::allocate(alloc_, init.size());
         try {
-            std::uninitialized_copy(init.begin(), init.end(), data);
-            size = init.size();
+            std::uninitialized_copy(init.begin(), init.end(), data_);
+            size_ = init.size();
         }
         catch (...) {
-            AllocTraits::deallocate(alloc, data, init.size());
+            AllocTraits::deallocate(alloc_, data_, init.size());
             throw;
         }
     }
 
     void swap(Vector& other) noexcept {
         using std::swap;
-        swap(size, other.size);
-        swap(capacity, other.capacity);
-        swap(data, other.data);
+        swap(size_, other.size_);
+        swap(capacity_, other.capacity_);
+        swap(data_, other.data_);
         if (AllocTraits::propagate_on_container_swap::value) {
-            swap(alloc, other.alloc);
+            swap(alloc_, other.alloc_);
         }
     }
 
     [[nodiscard]] allocator<T> get_allocator() const noexcept {
-        return alloc;
+        return alloc_;
     }
 
     template <bool isConst>
@@ -291,12 +304,12 @@ public:
     };
 
     friend baseIterator<false> operator+(typename baseIterator<false>::difference_type n,
-                                       const baseIterator<false>& it) noexcept {
+        const baseIterator<false>& it) noexcept {
         return it + n;
     }
 
     friend baseIterator<true> operator+(typename baseIterator<true>::difference_type n,
-                                      const baseIterator<true>& it) noexcept {
+        const baseIterator<true>& it) noexcept {
         return it + n;
     }
 
@@ -395,12 +408,12 @@ public:
     };
 
     friend reverseIterator<false> operator+(typename reverseIterator<false>::difference_type n,
-                                          const reverseIterator<false>& it) noexcept {
+        const reverseIterator<false>& it) noexcept {
         return it + n;
     }
 
     friend reverseIterator<true> operator+(typename reverseIterator<true>::difference_type n,
-                                         const reverseIterator<true>& it) noexcept {
+        const reverseIterator<true>& it) noexcept {
         return it + n;
     }
 
@@ -409,44 +422,43 @@ public:
     using RIterator = reverseIterator<false>;
     using ConstRIterator = reverseIterator<true>;
 
-    Iterator begin() noexcept { return Iterator(data); }
-    Iterator end() noexcept { return Iterator(data + size); }
+    Iterator begin() noexcept { return Iterator(data_); }
+    Iterator end() noexcept { return Iterator(data_ + size_); }
 
-    ConstIterator begin() const noexcept { return ConstIterator(data); }
-    ConstIterator end() const noexcept { return ConstIterator(data + size); }
+    ConstIterator begin() const noexcept { return ConstIterator(data_); }
+    ConstIterator end() const noexcept { return ConstIterator(data_ + size_); }
 
-    ConstIterator cbegin() const noexcept { return ConstIterator(data); }
-    ConstIterator cend() const noexcept { return ConstIterator(data + size); }
+    ConstIterator cbegin() const noexcept { return ConstIterator(data_); }
+    ConstIterator cend() const noexcept { return ConstIterator(data_ + size_); }
 
-    RIterator rbegin() noexcept { return RIterator(data + size - 1); }
-    RIterator rend() noexcept { return RIterator(data - 1); }
+    RIterator rbegin() noexcept { return RIterator(data_ + size_ - 1); }
+    RIterator rend() noexcept { return RIterator(data_ - 1); }
 
-    ConstRIterator rbegin() const noexcept { return ConstRIterator(data + size - 1); }
-    ConstRIterator rend() const noexcept { return ConstRIterator(data - 1); }
+    ConstRIterator rbegin() const noexcept { return ConstRIterator(data_ + size_ - 1); }
+    ConstRIterator rend() const noexcept { return ConstRIterator(data_ - 1); }
 
-    ConstRIterator crbegin() const noexcept { return ConstRIterator(data + size - 1); }
-    ConstRIterator crend() const noexcept { return ConstRIterator(data - 1); }
-
-    ~Vector() { clearMemory(); }
+    ConstRIterator crbegin() const noexcept { return ConstRIterator(data_ + size_ - 1); }
+    ConstRIterator crend() const noexcept { return ConstRIterator(data_ - 1); }
 
     void reserve(size_t newCapacity) {
-        if (newCapacity > capacity) {
+        if (newCapacity > capacity_) {
             resize(newCapacity);
         }
     }
 
     template <typename... Args>
     void emplace_back(Args&&... args) {
-        if (size == capacity) {
-            size_t newCap = capacity == 0 ? 1 : capacity + (capacity >> 1) + 1;
+        if (size_ == capacity_) {
+            size_t newCap = capacity_ == 0 ? 1 : capacity_ + (capacity_ >> 1) + 1;
             resize(newCap);
         }
         if constexpr (std::is_trivially_constructible_v<T, Args...>) {
-            new (data + size) T(std::forward<Args>(args)...);
-        } else {
-            create_object(data + size, std::forward<Args>(args)...);
+            new (data_ + size_) T(std::forward<Args>(args)...);
         }
-        ++size;
+        else {
+            create_object(data_ + size_, std::forward<Args>(args)...);
+        }
+        ++size_;
     }
 
     void push_back(const T& value) {
@@ -469,59 +481,59 @@ public:
         }
 
         if constexpr (std::is_trivially_destructible_v<T>) {
-            (data + size - 1)->~T();
+            (data_ + size_ - 1)->~T();
             return;
         }
 
-        AllocTraits::destroy(alloc, data + size);
-        --size;
+        AllocTraits::destroy(alloc_, data_ + size_);
+        --size_;
     }
 
     T& operator[](int index) const {
-        return *(data + index);
+        return *(data_ + index);
     }
 
     T& back() const {
-        if (size <= 0) {
+        if (size_ <= 0) {
             throw out_of_range("Vector is empty");
         }
-        return data[size - 1];
+        return data_[size_ - 1];
     }
 
     bool find(const T& element) const {
-        return std::find(data, data + size, element) != data + size;
+        return std::find(data_, data_ + size_, element) != data_ + size_;
     }
 
     int index(const T& element) const {
-        auto it = std::find(data, data + size, element);
-        return it != data + size ? static_cast<int>(it - data) : -1;
+        auto it = std::find(data_, data_ + size_, element);
+        return it != data_ + size_ ? static_cast<int>(it - data_) : -1;
     }
 
     void insert(const T& element, size_t index) {
-        if (index > size) {
-            throw out_of_range(format("Index {} out of range (size: {})", index, size));
+        if (index > size_) {
+            throw out_of_range(format("Index {} out of range (size: {})", index, size_));
         }
 
-        if (size == capacity) {
-            size_t newCapacity = capacity == 0 ? 1 : capacity + (capacity >> 1);
+        if (size_ == capacity_) {
+            size_t newCapacity = capacity_ == 0 ? 1 : capacity_ + (capacity_ >> 1);
             reserve(newCapacity);
         }
 
-        if (index < size) {
-            std::move_backward(data + index, data + size, data + size + 1);
+        if (index < size_) {
+            std::move_backward(data_ + index, data_ + size_, data_ + size_ + 1);
         }
 
-        create_object(data + index, element);
-        ++size;
+        create_object(data_ + index, element);
+        ++size_;
     }
 
     void erase(size_t index) {
-        if (index >= size) {
+        if (index >= size_) {
             throw out_of_range("Index out of range");
         }
-        std::move(data + index + 1, data + size, data + index);
-        AllocTraits::destroy(alloc, data + size - 1);
-        --size;
+        std::move(data_ + index + 1, data_ + size_, data_ + index);
+        AllocTraits::destroy(alloc_, data_ + size_ - 1);
+        --size_;
     }
 
     Iterator erase(Iterator pos) {
@@ -531,27 +543,27 @@ public:
 
         auto index = std::distance(begin(), pos);
         std::move(pos + 1, end(), pos);
-        --size;
-        AllocTraits::destroy(alloc, data + size);
-        return Iterator(data + index);
+        --size_;
+        AllocTraits::destroy(alloc_, data_ + size_);
+        return Iterator(data_ + index);
     }
 
     void erase(size_t first_index, size_t last_index) {
-        if (first_index > last_index || last_index > size) {
+        if (first_index > last_index || last_index > size_) {
             throw out_of_range("Invalid index range");
         }
 
         if (first_index == last_index) {
-            return ;
+            return;
         }
 
         auto count = last_index - first_index;
-        std::move(data + last_index, data + size, data + first_index);
+        std::move(data_ + last_index, data_ + size_, data_ + first_index);
 
         for (size_t i = 0; i < count; ++i) {
-            AllocTraits::destroy(alloc, data + size - 1 - i);
+            AllocTraits::destroy(alloc_, data_ + size_ - 1 - i);
         }
-        size -= count;
+        size_ -= count;
     }
 
     Iterator erase(Iterator first, Iterator last) {
@@ -568,57 +580,59 @@ public:
 
         std::move(last, end(), first);
         for (auto it = end() - count; it != end(); ++it) {
-            AllocTraits::destroy(alloc, std::addressof(*it));
+            AllocTraits::destroy(alloc_, std::addressof(*it));
         }
-        size -= count;
-        return Iterator(data + index);
+        size_ -= count;
+        return Iterator(data_ + index);
     }
 
     [[nodiscard]] bool empty() const noexcept {
-        return size == 0;
+        return size_ == 0;
     }
 
     void clear() {
-        destroy_n(data, size);
-        size = 0;
+        destroy_n(data_, size_);
+        size_ = 0;
     }
 
-    [[nodiscard]] size_t getSize() const noexcept {
-        return size;
+    [[nodiscard]] size_t size() const noexcept {
+        return size_;
     }
 
-    [[nodiscard]] size_t getCapacity() const noexcept {
-        return capacity;
+    [[nodiscard]] size_t capacity() const noexcept {
+        return capacity_;
     }
 
     [[nodiscard]] T& at(size_t index) {
-        if (index >= size) {
-            throw out_of_range(format("Index {} out of range (size: {})", index, size));
+        if (index >= size_) {
+            throw out_of_range(format("Index {} out of range (size: {})", index, size_));
         }
-        return data[index];
+        return data_[index];
     }
 
     [[nodiscard]] const T& at(size_t index) const {
-        if (index >= size) {
-            throw out_of_range(format("Index {} out of range (size: {})", index, size));
+        if (index >= size_) {
+            throw out_of_range(format("Index {} out of range (size: {})", index, size_));
         }
-        return data[index];
+        return data_[index];
     }
 
     void shrink_to_fit() {
-        if (size < capacity) {
+        if (size_ < capacity_) {
             if constexpr (std::is_trivially_copyable_v<T>) {
-                if (T* newData = static_cast<T*>(std::realloc(data, size * sizeof(T)))) {
-                    data = newData;
-                    capacity = size;
+                if (T* newData = static_cast<T*>(std::realloc(data_, size_ * sizeof(T)))) {
+                    data_ = newData;
+                    capacity_ = size_;
                     return;
                 }
             }
-            T* newData = AllocTraits::allocate(alloc, size);
-            std::uninitialized_move_n(data, size, newData);
+            T* newData = AllocTraits::allocate(alloc_, size_);
+            std::uninitialized_move_n(data_, size_, newData);
             clearMemory();
-            data = newData;
-            capacity = size;
+            data_ = newData;
+            capacity_ = size_;
         }
     }
+
+    ~Vector() { clearMemory(); }
 };
