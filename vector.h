@@ -489,7 +489,7 @@ public:
         --size_;
     }
 
-    reference operator[](int index) const {
+    reference operator[](int index) {
         return *(data_ + index);
     }
 
@@ -497,7 +497,7 @@ public:
         return *(data_ + index);
     }
 
-    reference back() const {
+    reference back() {
         if (size_ <= 0) {
             throw out_of_range("Vector is empty");
         }
