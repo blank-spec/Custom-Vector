@@ -122,9 +122,6 @@ int main() {
     // You can combine the methods
     vec.erase(vec.index(10)); // firts, finding index of element, than it will be remove by it index
 
-    // Print the updated state of the vector
-    vec.print(); // Output: 1 2 4 5 6 7 
-
     // Accessing elements
     int firstElement = vec[0]; // Access the first element
     int lastElement = vec.back(); // Access the last element
