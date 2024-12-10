@@ -74,7 +74,7 @@ private:
 public:
     using value_type = T;
     using allocator_type = Alloc;
-    using size_type = rsize_t;
+    using size_type = size_t;
     using difference_type = std::ptrdiff_t;
     using reference = T&;
     using const_reference = const T&;
@@ -481,6 +481,7 @@ public:
 
         if constexpr (std::is_trivially_destructible_v<T>) {
             (data_ + size_ - 1)->~T();
+            --size_;
             return;
         }
 
@@ -488,11 +489,22 @@ public:
         --size_;
     }
 
-    T& operator[](int index) const {
+    reference operator[](int index) const {
         return *(data_ + index);
     }
 
-    T& back() const {
+    const_reference operator[](int index) const {
+        return *(data_ + index);
+    }
+
+    reference back() const {
+        if (size_ <= 0) {
+            throw out_of_range("Vector is empty");
+        }
+        return data_[size_ - 1];
+    }
+
+    const_reference back() const {
         if (size_ <= 0) {
             throw out_of_range("Vector is empty");
         }
@@ -503,7 +515,7 @@ public:
         return std::find(data_, data_ + size_, element) != data_ + size_;
     }
 
-    int index(const T& element) const {
+    size_t index(const T& element) const {
         auto it = std::find(data_, data_ + size_, element);
         return it != data_ + size_ ? static_cast<int>(it - data_) : -1;
     }
@@ -516,6 +528,24 @@ public:
         if (size_ == capacity_) {
             size_t newCapacity = capacity_ == 0 ? 1 : capacity_ + (capacity_ >> 1);
             reserve(newCapacity);
+        }
+
+        if (index < size_) {
+            std::move_backward(data_ + index, data_ + size_, data_ + size_ + 1);
+        }
+
+        create_object(data_ + index, element);
+        ++size_;
+    }
+
+    void insert(const T& element, Iterator pos) {
+        auto index = distance(begin(), pos);
+
+        if (size_ == capacity_) {
+            if (size_ == capacity_) {
+                size_t newCapacity = capacity_ == 0 ? 1 : capacity_ + (capacity_ >> 1);
+                reserve(newCapacity);
+            }
         }
 
         if (index < size_) {
