@@ -96,10 +96,10 @@ public:
     }
 
     Vector(size_t count, const T& value, const Alloc& allocator = Alloc())
-    : capacity_(count)
-    , size_(0)
-    , data_(nullptr)
-    , alloc_(allocator) {
+        : capacity_(count)
+        , size_(0)
+        , data_(nullptr)
+        , alloc_(allocator) {
         check_size(count);
         Alloc& nonConstAlloc = const_cast<Alloc&>(alloc_); // Temporarily cast away const
         data_ = AllocTraits::allocate(nonConstAlloc, count);
@@ -223,6 +223,9 @@ public:
         T* ptr;
 
     public:
+
+        template <bool OtherIsConst, typename = std::enable_if_t<isConst && !OtherIsConst>>
+        baseIterator(const baseIterator<OtherIsConst>& other) noexcept : ptr(other.ptr) {}
         baseIterator(T* p = nullptr) noexcept : ptr(p) {}
         baseIterator(const baseIterator& other) noexcept = default;
         baseIterator& operator=(const baseIterator& other) noexcept = default;
@@ -523,7 +526,7 @@ public:
     }
 
     void insert(const T& element, size_t index) {
-        if (index > size_) {
+        if (index > size_ || index < 0) {
             throw out_of_range(format("Index {} out of range (size: {})", index, size_));
         }
 
@@ -542,6 +545,10 @@ public:
 
     void insert(const T& element, Iterator pos) {
         auto index = distance(begin(), pos);
+
+        if (index > size_ || index < 0) {
+            throw out_of_range(format("Index {} out of range (size: {})", index, size_));
+        }
 
         if (size_ == capacity_) {
             if (size_ == capacity_) {
@@ -567,16 +574,9 @@ public:
         --size_;
     }
 
+    template <typename Iterator>
     Iterator erase(Iterator pos) {
-        if (pos >= end() || pos < begin()) {
-            throw std::out_of_range("Iterator out of range");
-        }
-
-        auto index = std::distance(begin(), pos);
-        std::move(pos + 1, end(), pos);
-        --size_;
-        AllocTraits::destroy(alloc_, data_ + size_);
-        return Iterator(data_ + index);
+        return erase(pos, pos + 1);
     }
 
     void erase(size_t first_index, size_t last_index) {
@@ -598,23 +598,19 @@ public:
     }
 
     Iterator erase(Iterator first, Iterator last) {
-        if (first > last || first < begin() || last > end()) {
-            throw std::out_of_range("Invalid iterator range");
+        if (first < begin() || last < begin() || first > end() || last > end() || first > last) {
+            throw std::out_of_range("Iterator out of range");
         }
 
-        if (first == last) {
-            return first;
-        }
+        auto new_end = std::move(last, end(), first);
 
-        auto index = std::distance(begin(), first);
-        auto count = std::distance(first, last);
-
-        std::move(last, end(), first);
-        for (auto it = end() - count; it != end(); ++it) {
+        for (auto it = new_end; it != end(); ++it) {
             AllocTraits::destroy(alloc_, std::addressof(*it));
         }
-        size_ -= count;
-        return Iterator(data_ + index);
+
+        size_ -= std::distance(first, last);
+
+        return first;
     }
 
     [[nodiscard]] bool empty() const noexcept {
