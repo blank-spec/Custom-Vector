@@ -101,7 +101,7 @@ public:
         , data_(nullptr)
         , alloc_(allocator) {
         check_size(count);
-        Alloc& nonConstAlloc = const_cast<Alloc&>(alloc_); // Temporarily cast away const
+        Alloc& nonConstAlloc = const_cast<Alloc&>(alloc_);
         data_ = AllocTraits::allocate(nonConstAlloc, count);
         try {
             std::uninitialized_fill_n(data_, count, value);
@@ -120,13 +120,14 @@ public:
         , data_(nullptr)
         , alloc_(allocator) {
         check_size(count);
-        data_ = AllocTraits::allocate(allocator, count);
+        Alloc& nonConstAlloc = const_cast<Alloc&>(alloc_);
+        data_ = AllocTraits::allocate(nonConstAlloc, capacity_);
         try {
-            std::uninitialized_default_construct_n(data_, count);
+            std::uninitialized_fill_n(data_, count, T());
             size_ = count;
         }
         catch (...) {
-            AllocTraits::deallocate(alloc_, data_, count);
+            AllocTraits::deallocate(nonConstAlloc, data_, count);
             throw;
         }
     }
@@ -579,7 +580,7 @@ public:
         return erase(pos, pos + 1);
     }
 
-    void erase(size_t first_index, size_t last_index) {
+    T erase(size_t first_index, size_t last_index) {
         if (first_index > last_index || last_index > size_) {
             throw out_of_range("Invalid index range");
         }
@@ -595,6 +596,8 @@ public:
             AllocTraits::destroy(alloc_, data_ + size_ - 1 - i);
         }
         size_ -= count;
+
+        return first_index;
     }
 
     Iterator erase(Iterator first, Iterator last) {
